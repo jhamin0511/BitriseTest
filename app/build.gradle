@@ -1,45 +1,122 @@
-plugins {
-    id 'com.android.application'
-    id 'kotlin-android'
-}
+apply plugin: 'com.android.application'
+apply plugin: 'com.google.gms.google-services'
+apply plugin: 'com.google.firebase.firebase-perf'
+apply plugin: 'com.google.firebase.crashlytics'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-android-extensions'
+apply plugin: 'kotlin-kapt'
+apply plugin: 'io.sentry.android.gradle'
 
 android {
-    compileSdkVersion 30
-    buildToolsVersion "30.0.3"
+    signingConfigs {
+        release {
+            keyAlias 'release_key'
+            keyPassword 'roqkfwk1223$'
+            storeFile file("../spendit_release.jks")
+            storePassword 'roqkfwk1223$'
+        }
+        debug {
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+            storeFile file("../debug.keystore")
+            storePassword 'android'
+        }
+    }
+    compileSdkVersion rootProject.compileSdkVersion
 
+    def CODE = 248
+    def VERSION_BUILD = "\"2021.01.25.0\""
+    def VERSION_NAME = "2.19.0"
     defaultConfig {
         applicationId "com.example.bitrisetest"
-        minSdkVersion 21
-        targetSdkVersion 30
-        versionCode 1
-        versionName "1.0"
-
+        minSdkVersion rootProject.minSdkVersion
+        targetSdkVersion rootProject.targetSdkVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        multiDexEnabled = true
+
+        versionCode CODE
+        versionName VERSION_NAME
     }
 
     buildTypes {
-        release {
+        debug {
+            aaptOptions.cruncherEnabled false
+            signingConfig signingConfigs.debug
             minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            testProguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguardTest-rules.pro'
+            firebaseCrashlytics {
+                // If you don't need crash reporting for your debug build,
+                // you can speed up your build by disabling mapping file uploading.
+                mappingFileUploadEnabled false
+            }
+        }
+
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            testProguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguardTest-rules.pro'
+            firebaseCrashlytics {
+                nativeSymbolUploadEnabled true
+                strippedNativeLibsDir "src/main/jniLibs"
+                unstrippedNativeLibsDir "src/main/jniLibs"
+            }
         }
     }
-    // Specifies one flavor dimension.
+
+    externalNativeBuild {
+        ndkBuild {
+            path 'src/main/jni/Android.mk'
+        }
+    }
+
+    androidExtensions {
+        experimental = true
+    }
+
     flavorDimensions "version"
+
+    def USER_AGENT = "\"SPENDIT/" + VERSION_NAME + " ANDROID/" + rootProject.targetSdkVersion + "\""
     productFlavors {
-        demo {
-            // Assigns this product flavor to the "version" flavor dimension.
-            // If you are using only one dimension, this property is optional,
-            // and the plugin automatically assigns all the module's flavors to
-            // that dimension.
+        staging {
+            minSdkVersion 21
+            resConfigs "ko", "xxxhdpi"
+
             dimension "version"
-            applicationIdSuffix ".demo"
-            versionNameSuffix "-demo"
+            applicationIdSuffix ".staging"
+            versionNameSuffix "-staging"
+            buildConfigField("String", "USER_AGENT", USER_AGENT)
+            buildConfigField("String", "VERSION_BUILD", VERSION_BUILD)
         }
-        full {
+        product {
             dimension "version"
-            applicationIdSuffix ".full"
-            versionNameSuffix "-full"
+
+            applicationIdSuffix ""
+            versionNameSuffix ""
+            buildConfigField("String", "USER_AGENT", USER_AGENT)
+            buildConfigField("String", "VERSION_BUILD", VERSION_BUILD)
         }
+    }
+    android.variantFilter { variant ->
+        if (variant.buildType.name == 'release' && variant.getFlavors().get(0).name == 'staging') {
+            variant.setIgnore(true)
+        }
+    }
+    buildFeatures {
+        dataBinding = true
+    }
+    dexOptions {
+        javaMaxHeapSize = "4g"
+    }
+    lintOptions {
+        // checkReleaseBuilds false
+        // Or, if you prefer, you can continue to check for errors in release builds,
+        // but continue the build even when errors are found:
+        abortOnError false
+    }
+    packagingOptions {
+        exclude 'META-INF/library_release.kotlin_module'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
@@ -48,15 +125,270 @@ android {
     kotlinOptions {
         jvmTarget = '1.8'
     }
+    testOptions {
+        unitTests {
+            returnDefaultValues true
+            includeAndroidResources true
+        }
+    }
+    sourceSets {
+        String sharedTestDir = 'src/sharedTest/java'
+        test {
+            java.srcDir sharedTestDir
+        }
+        androidTest {
+            java.srcDir sharedTestDir
+        }
+    }
 }
 
 dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
 
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
-    implementation 'androidx.core:core-ktx:1.2.0'
-    implementation 'androidx.appcompat:appcompat:1.2.0'
-    implementation 'com.google.android.material:material:1.1.0'
-    testImplementation 'junit:junit:4.+'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.2'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.3.0'
+    // # MOUDLE
+//    implementation project(':camera-library')
+//    implementation project(':easypermissions')
+//    implementation project(':widget')
+
+    // # FILES
+
+    // KAKAO
+    implementation files('libs/kakao-android-sdk-analytics-1.0.15.jar')
+
+    // [Kotlin]
+    implementation "org.jetbrains.kotlin:kotlin-reflect:$rootProject.kotlin_version"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$rootProject.kotlin_version"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:1.3.2"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.3.2"
+
+    // ========== Java Opensource Library ==========
+    implementation 'com.google.guava:guava:28.1-android'
+
+    // ========== Test ==========
+    // https://mvnrepository.com/artifact/junit/junit
+    testImplementation 'junit:junit:4.12'
+    testImplementation "com.google.truth:truth:$rootProject.truth_version"
+
+    // [LiveData Test]
+    // https://github.com/jraska/livedata-testing/releases
+    def livedata_test_versino = "1.1.1"
+    testImplementation "com.jraska.livedata:testing:$livedata_test_versino"
+    testImplementation "com.jraska.livedata:testing-ktx:$livedata_test_versino"
+
+    // # [Espresso]
+    def espresso_version = "3.3.0"
+    testImplementation "androidx.test.espresso:espresso-core:$espresso_version"
+    testImplementation "androidx.test.espresso:espresso-intents:$espresso_version"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$espresso_version"
+    androidTestImplementation "androidx.test.espresso:espresso-intents:$espresso_version"
+
+    // # [AndroidJUnitRunner and JUnit Rules]
+    def arch_version = "2.1.0"
+    androidTestImplementation "androidx.arch.core:core-testing:$arch_version"
+    testImplementation "androidx.arch.core:core-testing:$arch_version"
+
+    def test_version = "1.2.0"
+    testImplementation "androidx.test:core:$test_version"
+    testImplementation "androidx.test:rules:$test_version"
+    androidTestImplementation "androidx.test:core:$test_version"
+    androidTestImplementation "androidx.test:rules:$test_version"
+    androidTestImplementation "androidx.test:runner:$test_version"
+
+    def junit_version = '1.1.2'
+    testImplementation "androidx.test.ext:junit:$junit_version"
+    androidTestImplementation "androidx.test.ext:junit:$junit_version"
+
+    // # [Mokito]
+    // https://github.com/mockito/mockito/releases
+    // https://mvnrepository.com/artifact/org.mockito
+    def mockito_version = '3.4.6'
+    testImplementation "org.mockito:mockito-core:$mockito_version"
+    testImplementation "org.mockito:mockito-inline:$mockito_version"
+    testImplementation "com.nhaarman.mockitokotlin2:mockito-kotlin:2.2.0"
+    androidTestImplementation "org.mockito:mockito-android:$mockito_version"
+
+    // # [Robolectric]
+    testImplementation "org.robolectric:robolectric:$rootProject.robolectric_version"
+
+    // ========== Android X ==========
+    // https://dl.google.com/dl/android/maven2/index.html
+    // https://developer.android.com/topic/libraries/support-library/revisions
+    // https://developer.android.com/studio/build/multidex?hl=en#mdex-gradle
+    implementation "androidx.multidex:multidex:2.0.1"
+    implementation "androidx.constraintlayout:constraintlayout:2.0.2"
+    implementation "androidx.legacy:legacy-support-v4:$legacyVersion"
+    implementation "androidx.appcompat:appcompat:$androidxVersion"
+    implementation "androidx.annotation:annotation:$androidxVersion"
+    implementation "androidx.gridlayout:gridlayout:$gridlayoutVersion"
+    implementation "androidx.vectordrawable:vectordrawable-animated:$androidxVersion"
+    implementation "androidx.exifinterface:exifinterface:1.3.1"
+    implementation "androidx.mediarouter:mediarouter:1.2.0"
+    // implementation "com.google.android.material:material:${ANDROID_SUPPORT_VERSION}"
+    implementation "androidx.cardview:cardview:$cardviewVersion"
+    implementation "androidx.recyclerview:recyclerview:$recyclerviewVersion"
+
+    // ========== ACTIVITY ==========
+    // https://developer.android.com/jetpack/androidx/releases/activity#declaring_dependencies
+    def activity_version = "1.1.0"
+    implementation "androidx.activity:activity:$activity_version"
+    implementation "androidx.activity:activity-ktx:$activity_version"
+
+    // ========== FRAGMENT ==========
+    // https://developer.android.com/jetpack/androidx/releases/fragment#declaring_dependencies
+    def fragment_version = "1.2.5"
+    implementation "androidx.fragment:fragment:$fragment_version"
+    implementation "androidx.fragment:fragment-ktx:$fragment_version"
+    implementation("androidx.fragment:fragment-testing:$fragment_version", {
+        exclude group: 'androidx.test', module: 'core'
+    })
+
+    // ========== GOOGLE PLAY SERVICES ==========
+    // https://developers.google.com/android/guides/setup
+    def playVersion = "17.0.0"
+    implementation "com.google.android.gms:play-services-maps:$playVersion"
+    implementation "com.google.android.gms:play-services-location:17.1.0"
+
+    // ========== GOOGLE FIREBASE ==========
+    // https://firebase.google.com/support/release-notes/android
+    def analytics_version = "18.0.0"
+    implementation "com.google.firebase:firebase-analytics:$analytics_version"
+    implementation "com.google.firebase:firebase-analytics-ktx:$analytics_version"
+    implementation 'com.google.firebase:firebase-perf:19.0.10'
+    def crash_version = "17.3.0"
+    implementation "com.google.firebase:firebase-crashlytics:$crash_version"
+    implementation "com.google.firebase:firebase-crashlytics-ktx:$crash_version"
+    implementation "com.google.firebase:firebase-crashlytics-ndk:$crash_version"
+    def messaging_version = "21.0.0"
+    implementation "com.google.firebase:firebase-messaging:$messaging_version"
+    implementation "com.google.firebase:firebase-messaging-ktx:$messaging_version"
+    def config_version = "19.1.3"
+    implementation "com.google.firebase:firebase-config:$config_version"
+    implementation "com.google.firebase:firebase-config-ktx:$config_version"
+
+    // ========== Android Architecture Componets ==========
+    // # [Room Database]
+    def room_version = '2.2.5'
+    implementation "androidx.room:room-runtime:$room_version"
+    annotationProcessor "androidx.room:room-compiler:$room_version"
+    androidTestImplementation "androidx.room:room-testing:$room_version"
+    // RxJava support for Room
+    implementation "androidx.room:room-rxjava2:$room_version"
+    // Room With Kotlin
+    implementation "androidx.room:room-ktx:$room_version"
+    kapt "androidx.room:room-compiler:$room_version"
+    // # [Lifecycle]
+    def lifecycle_version = "2.2.0"
+    // ViewModel and LiveData
+    implementation "androidx.lifecycle:lifecycle-extensions:$lifecycle_version"
+    implementation "androidx.lifecycle:lifecycle-runtime:$lifecycle_version"
+    implementation 'com.github.ibrahimsn98:live-preferences:1.1'
+    // optional - Test helpers for LiveData
+    // annotationProcessor "androidx.lifecycle:lifecycle-compiler:$lifecycle_version"
+    implementation "androidx.lifecycle:lifecycle-common-java8:$lifecycle_version"
+    // Lifecycle With Kotlin
+    implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:$lifecycle_version"
+    implementation "androidx.lifecycle:lifecycle-livedata-ktx:$lifecycle_version"
+
+    // ========== Dependency Injection ==========
+    // # [Dagger2][https://github.com/google/dagger/releases]
+    def daggerVersion = "2.25.3"
+    implementation "com.google.dagger:dagger:$daggerVersion"
+    annotationProcessor "com.google.dagger:dagger-compiler:$daggerVersion"
+    annotationProcessor "com.google.dagger:dagger-android-processor:$daggerVersion"
+    implementation "com.google.dagger:dagger-android:$daggerVersion"
+    implementation "com.google.dagger:dagger-android-support:$daggerVersion"
+    // Dagger2 With Kotlin
+    kapt "com.google.dagger:dagger-android-processor:$daggerVersion"
+    kapt "com.google.dagger:dagger-compiler:$daggerVersion"
+    kapt 'com.android.databinding:compiler:3.1.4'
+
+    // ========== RESTFul ==========
+    // # [Retrofit2][https://github.com/square/retrofit/releases]
+    def retrofitVersion = "2.7.1"
+    implementation "com.squareup.retrofit2:retrofit:$retrofitVersion"
+    implementation "com.squareup.retrofit2:converter-scalars:$retrofitVersion"
+    implementation "com.squareup.retrofit2:converter-gson:$retrofitVersion"
+    implementation "com.squareup.retrofit2:retrofit-mock:$retrofitVersion"
+    implementation "com.squareup.retrofit2:adapter-rxjava2:$retrofitVersion"
+    // [OkHttp3][https://github.com/square/okhttp/releases]
+    def okhttp_version = "4.3.1"
+    implementation "com.squareup.okhttp3:okhttp:$okhttp_version"
+    implementation "com.squareup.okhttp3:mockwebserver:$okhttp_version"
+    implementation "com.squareup.okhttp3:logging-interceptor:$okhttp_version"
+
+    // ==========  RxJava & RxAndoird ==========
+    implementation "io.reactivex.rxjava2:rxjava:2.2.9"
+    implementation "io.reactivex.rxjava2:rxandroid:2.1.1"
+
+    // apache [https://mvnrepository.com/artifact/commons-io/commons-io]
+    implementation 'commons-io:commons-io:2.6@jar'
+
+    // # IMAGE
+
+    // # [GLIDE][https://github.com/bumptech/glide/releases]
+    def glideVersion = "4.11.0"
+    implementation "com.github.bumptech.glide:glide:$glideVersion"
+    annotationProcessor "com.github.bumptech.glide:compiler:$glideVersion"
+    // GLIDE With Kotlin
+    kapt "com.github.bumptech.glide:glide:$glideVersion"
+    kapt "com.github.bumptech.glide:compiler:$glideVersion"
+
+    // IMAGE LIBRARY
+
+    // https://mvnrepository.com/artifact/com.github.chrisbanes.photoview/library
+    implementation 'com.github.chrisbanes.photoview:library:1.2.4'
+
+    // https://github.com/vinc3m1/RoundedImageView/releases
+    implementation 'com.makeramen:roundedimageview:2.3.0'
+
+    // Animatiom Library   https://github.com/airbnb/lottie-android/releases
+    implementation 'com.airbnb.android:lottie:3.4.0'
+
+    // GIF Library   https://github.com/koral--/android-gif-drawable/releases
+    implementation 'pl.droidsonroids.gif:android-gif-drawable:1.2.19'
+
+    // Android-Image-Cropper   https://github.com/ArthurHub/Android-Image-Cropper/releases
+    implementation 'com.theartofdev.edmodo:android-image-cropper:2.8.0'
+
+    // # CHART
+    // https://github.com/PhilJay/MPAndroidChart/releases
+    implementation 'com.github.PhilJay:MPAndroidChart:v3.1.0'
+
+    // # MAP BOX
+    // add the Mapbox SDK dependency below
+    // https://github.com/mapbox/mapbox-gl-native/releases
+    implementation 'com.mapbox.mapboxsdk:mapbox-android-sdk:9.0.1'
+    // https://github.com/mapbox/mapbox-java/releases
+    implementation 'com.mapbox.mapboxsdk:mapbox-sdk-services:5.0.0'
+
+    // # PDF Vewer
+
+    // https://github.com/barteksc/AndroidPdfViewer/releases
+    implementation 'com.github.barteksc:android-pdf-viewer:2.8.2'
+
+    // # Pager Indicator
+
+    // https://github.com/romandanylyk/PageIndicatorView/releases
+    implementation 'com.romandanylyk:pageindicatorview:1.0.3'
+
+    // # Intercom
+    // https://github.com/intercom/intercom-android/releases
+    implementation 'io.intercom.android:intercom-sdk-base:6.0.1'
+    implementation 'io.intercom.android:intercom-sdk-fcm:6.0.1'
+
+    // ========== Logging ==========
+    // # Sentry [https://github.com/getsentry/sentry-java/releases]
+    def sentry_version = "3.2.1"
+    implementation "io.sentry:sentry-android:$sentry_version"
+    // # Datadog [https://github.com/DataDog/dd-sdk-android/releases]
+    implementation "com.datadoghq:dd-sdk-android:1.2.2"
+    // # UUID [https://github.com/cowtowncoder/java-uuid-generator/releases]
+    implementation "com.fasterxml.uuid:java-uuid-generator:4.0"
+    // # [HTTP Inspector][https://github.com/ChuckerTeam/chucker/releases]
+    implementation "com.github.ChuckerTeam.Chucker:library:3.1.2"
+    // # [Timber][https://github.com/JakeWharton/timber/releases]
+    implementation 'com.jakewharton.timber:timber:4.7.1'
+    // # [LeakCanary][https://github.com/square/leakcanary/releases]
+    // debugImplementation because LeakCanary should only run in debug builds.
+    debugImplementation 'com.squareup.leakcanary:leakcanary-android:2.5'
 }
